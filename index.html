@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Çubuk AIHL Rehberlik v4.1 Cloud</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    
+    <style>
+        :root { --p: #00d2ff; --s: #2ecc71; --d: #e74c3c; --g: rgba(255,255,255,0.1); }
+        body { 
+            font-family: 'Segoe UI', sans-serif; margin: 0; 
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
+            color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+        }
+        header { width: 100%; background: var(--g); backdrop-filter: blur(10px); padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .container { 
+            width: 90%; max-width: 800px; margin: 40px auto; background: var(--g); 
+            backdrop-filter: blur(25px); padding: 40px; border-radius: 20px; 
+            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.5); text-align: center;
+        }
+        input { width: 85%; padding: 15px; margin: 10px 0; background: rgba(0,0,0,0.3); border: 1px solid var(--p); border-radius: 10px; color: white; font-size: 18px; outline: none; }
+        button { padding: 15px 30px; border-radius: 10px; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; margin: 10px; font-size: 16px; }
+        .btn-p { background: var(--p); color: white; }
+        .btn-d { background: var(--d); color: white; }
+        .btn-s { background: var(--s); color: white; }
+        .gizli { display: none !important; }
+        .kutu { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; margin-bottom: 15px; text-align: left; border-left: 5px solid var(--p); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: rgba(0,0,0,0.2); }
+        th, td { padding: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+        <img src="aihl.jpg" alt="Logo" style="height: 50px; border-radius: 8px;">
+        <h2 style="margin:0;">ÇUBUK AIHL REHBERLİK</h2>
+    </div>
+</header>
+
+<div class="container">
+    <div id="status">Bulut Sunucusuna Bağlanılıyor...</div>
+    
+    <div id="panel-giris" class="gizli">
+        <h1>Hoş Geldiniz</h1>
+        <input type="text" id="kod-input" placeholder="Giriş Kodunuz" maxlength="4">
+        <br>
+        <button class="btn-p" onclick="girisYap()">Sisteme Gir</button>
+        <p>Hesabınız yok mu? <button style="background:none; color:var(--p); padding:0; text-decoration:underline;" onclick="ekranAc('panel-kayit')">Kayıt Ol</button></p>
+        <hr style="opacity:0.2; margin:20px 0;">
+        <button onclick="hocaGirisi()" style="background:transparent; color:white; font-size:11px; border:1px solid rgba(255,255,255,0.2);">Yetkili Panel Girişi</button>
+    </div>
+
+    <div id="panel-kayit" class="gizli">
+        <h1>Yeni Kayıt</h1>
+        <input type="text" id="kayit-isim" placeholder="Ad Soyad">
+        <br>
+        <button class="btn-p" onclick="kaydet()">Kaydı Tamamla</button>
+        <button class="btn-d" onclick="ekranAc('panel-giris')">Geri</button>
+    </div>
+
+    <div id="panel-anket" class="gizli">
+        <h2 id="anket-baslik"></h2>
+        <div id="soru-alani"></div>
+        <button class="btn-s" onclick="anketKaydet()">Analizi Gönder</button>
+    </div>
+
+    <div id="panel-hoca" class="gizli">
+        <h1>Öğretmen Paneli</h1>
+        <button class="btn-p" onclick="ekranAc('panel-soru-duzenle')">Soruları Güncelle</button>
+        <button class="btn-d" onclick="location.reload()">Çıkış Yap</button>
+        <table>
+            <thead><tr><th>Öğrenci</th><th>Kod</th><th>Analiz</th><th>İşlem</th></tr></thead>
+            <tbody id="hoca-tablo"></tbody>
+        </table>
+    </div>
+
+    <div id="panel-soru-duzenle" class="gizli">
+        <h1>Soruları Güncelle</h1>
+        <div id="duzenle-liste"></div>
+        <button class="btn-s" onclick="soruKaydet()">Kaydet</button>
+        <button class="btn-d" onclick="ekranAc('panel-hoca')">İptal</button>
+    </div>
+</div>
+
+<script>
+    // --- FIREBASE YAPILANDIRMASI (BURAYI KENDİ BİLGİLERİNLE DEĞİŞTİR) ---
+   const firebaseConfig = {
+    apiKey: "AIzaSyBaQ5y2mvk3Nu37_6L-a5uKi55pvu-3gEY",
+    authDomain: "cubuk-rehberlik.firebaseapp.com",
+    databaseURL: "https://cubuk-rehberlik-default-rtdb.firebaseio.com",
+    projectId: "cubuk-rehberlik",
+    storageBucket: "cubuk-rehberlik.firebasestorage.app",
+    messagingSenderId: "72947799291",
+    appId: "1:72947799291:web:833003c3c8e377f7464c5e",
+    measurementId: "G-5NN6S2JQQY"
+  };
+
+    firebase.initializeApp(firebaseConfig);
+    const dbRef = firebase.database().ref('rehberlik');
+
+    let remoteData = { 
+        ogrenciler: [], 
+        sorular: ["Mutluyum","Güvendeyim","Derslere odaklanabiliyorum","Arkadaşlarımı seviyorum","Gelecekten umutluyum"] 
+    };
+    let aktifUser = null;
+
+    // Buluttan Veri Çekme ve Canlı Takip
+    dbRef.on('value', (snapshot) => {
+        const val = snapshot.val();
+        if(val) {
+            remoteData = val;
+            if(!remoteData.ogrenciler) remoteData.ogrenciler = [];
+        } else {
+            dbRef.set(remoteData); // Veritabanı boşsa varsayılanları yükle
+        }
+        document.getElementById('status').classList.add('gizli');
+        ekranAc('panel-giris');
+    });
+
+    function ekranAc(id) {
+        ["panel-giris","panel-kayit","panel-anket","panel-hoca","panel-soru-duzenle"].forEach(p => {
+            document.getElementById(p).classList.add('gizli');
+        });
+        document.getElementById(id).classList.remove('gizli');
+        if(id === 'panel-soru-duzenle') yukleDuzenleme();
+    }
+
+    function kaydet() {
+        let isim = document.getElementById('kayit-isim').value.toUpperCase();
+        if(!isim) return alert("Lütfen isim girin!");
+        let kod = Math.floor(1000 + Math.random() * 9000).toString();
+        remoteData.ogrenciler.push({ isim: isim, kod: kod, cevaplar: [] });
+        dbRef.set(remoteData);
+        alert("Kodun: " + kod + "\nLütfen bu kodu unutmayın!");
+        ekranAc('panel-giris');
+    }
+
+    function girisYap() {
+        let kod = document.getElementById('kod-input').value;
+        aktifUser = remoteData.ogrenciler.find(o => o.kod === kod);
+        if(aktifUser) {
+            document.getElementById('anket-baslik').innerText = "Hoş Geldin, " + aktifUser.isim;
+            yukleAnket();
+            ekranAc('panel-anket');
+        } else alert("Hatalı kod!");
+    }
+
+    function yukleAnket() {
+        let html = "";
+        remoteData.sorular.forEach((s, i) => {
+            html += `<div class="kutu"><p>${i+1}. ${s}</p><input type="range" id="q${i}" min="1" max="5" value="3" style="width:100%;"></div>`;
+        });
+        document.getElementById('soru-alani').innerHTML = html;
+    }
+
+    function anketKaydet() {
+        let c = [];
+        for(let i=0; i<remoteData.sorular.length; i++) c.push(parseInt(document.getElementById(`q${i}`).value));
+        const idx = remoteData.ogrenciler.findIndex(o => o.kod === aktifUser.kod);
+        remoteData.ogrenciler[idx].cevaplar = c;
+        dbRef.set(remoteData);
+        alert("Cevaplar başarıyla gönderildi!");
+        location.reload();
+    }
+
+    function hocaGirisi() {
+        if(prompt("Yetkili Şifresi:") === "9999") {
+            yukleTablo();
+            ekranAc('panel-hoca');
+        }
+    }
+
+    function yukleTablo() {
+        let html = "";
+        remoteData.ogrenciler.forEach((o, i) => {
+            let ort = o.cevaplar && o.cevaplar.length ? (o.cevaplar.reduce((a,b)=>a+b)/o.cevaplar.length) : 0;
+            let d = ort === 0 ? "Henüz Çözmedi" : (ort > 3 ? "<span style='color:var(--s)'>Desteğe İhtiyacı Yoktur</span>" : "<span style='color:var(--d)'>Desteğe İhtiyacı Vardır</span>");
+            html += `<tr><td>${o.isim}</td><td>${o.kod}</td><td>${d}</td><td><button onclick="sil(${i})" style="background:var(--d); color:white; padding:5px 10px;">X</button></td></tr>`;
+        });
+        document.getElementById('hoca-tablo').innerHTML = html;
+    }
+
+    function sil(i) { if(confirm("Kaydı tamamen silmek istiyor musunuz?")) { remoteData.ogrenciler.splice(i,1); dbRef.set(remoteData); yukleTablo(); } }
+
+    function yukleDuzenleme() {
+        let html = "";
+        remoteData.sorular.forEach((s, i) => {
+            html += `<div style="margin-bottom:15px; text-align:left;">Soru ${i+1}:<br><input type="text" id="ed${i}" value="${s}" style="width:95%;"></div>`;
+        });
+        document.getElementById('duzenle-liste').innerHTML = html;
+    }
+
+    function soruKaydet() {
+        for(let i=0; i<remoteData.sorular.length; i++) remoteData.sorular[i] = document.getElementById(`ed${i}`).value;
+        dbRef.set(remoteData);
+        alert("Sorular güncellendi!");
+        ekranAc('panel-hoca');
+    }
+</script>
+</body>
+</html>
