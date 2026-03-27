@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çubuk AIHL Rehberlik v4.1 Cloud</title>
+    <title>Çubuk AIHL Rehberlik v4.2 Cloud + Export</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     
@@ -69,8 +69,11 @@
 
     <div id="panel-hoca" class="gizli">
         <h1>Öğretmen Paneli</h1>
-        <button class="btn-p" onclick="ekranAc('panel-soru-duzenle')">Soruları Güncelle</button>
-        <button class="btn-d" onclick="location.reload()">Çıkış Yap</button>
+        <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+            <button class="btn-p" onclick="ekranAc('panel-soru-duzenle')">Soruları Güncelle</button>
+            <button onclick="excelIndir()" style="background: #28a745; color: white; padding: 15px 20px; border-radius: 10px; border: none; cursor: pointer; font-weight: bold;">📊 Sonuçları Excel Olarak İndir</button>
+            <button class="btn-d" onclick="location.reload()">Çıkış Yap</button>
+        </div>
         <table>
             <thead><tr><th>Öğrenci</th><th>Kod</th><th>Analiz</th><th>İşlem</th></tr></thead>
             <tbody id="hoca-tablo"></tbody>
@@ -86,17 +89,16 @@
 </div>
 
 <script>
-    // --- FIREBASE YAPILANDIRMASI (BURAYI KENDİ BİLGİLERİNLE DEĞİŞTİR) ---
-   const firebaseConfig = {
-    apiKey: "AIzaSyBaQ5y2mvk3Nu37_6L-a5uKi55pvu-3gEY",
-    authDomain: "cubuk-rehberlik.firebaseapp.com",
-    databaseURL: "https://cubuk-rehberlik-default-rtdb.firebaseio.com",
-    projectId: "cubuk-rehberlik",
-    storageBucket: "cubuk-rehberlik.firebasestorage.app",
-    messagingSenderId: "72947799291",
-    appId: "1:72947799291:web:833003c3c8e377f7464c5e",
-    measurementId: "G-5NN6S2JQQY"
-  };
+    const firebaseConfig = {
+        apiKey: "AIzaSyBaQ5y2mvk3Nu37_6L-a5uKi55pvu-3gEY",
+        authDomain: "cubuk-rehberlik.firebaseapp.com",
+        databaseURL: "https://cubuk-rehberlik-default-rtdb.firebaseio.com",
+        projectId: "cubuk-rehberlik",
+        storageBucket: "cubuk-rehberlik.firebasestorage.app",
+        messagingSenderId: "72947799291",
+        appId: "1:72947799291:web:833003c3c8e377f7464c5e",
+        measurementId: "G-5NN6S2JQQY"
+    };
 
     firebase.initializeApp(firebaseConfig);
     const dbRef = firebase.database().ref('rehberlik');
@@ -107,14 +109,13 @@
     };
     let aktifUser = null;
 
-    // Buluttan Veri Çekme ve Canlı Takip
     dbRef.on('value', (snapshot) => {
         const val = snapshot.val();
         if(val) {
             remoteData = val;
             if(!remoteData.ogrenciler) remoteData.ogrenciler = [];
         } else {
-            dbRef.set(remoteData); // Veritabanı boşsa varsayılanları yükle
+            dbRef.set(remoteData);
         }
         document.getElementById('status').classList.add('gizli');
         ekranAc('panel-giris');
@@ -181,6 +182,32 @@
             html += `<tr><td>${o.isim}</td><td>${o.kod}</td><td>${d}</td><td><button onclick="sil(${i})" style="background:var(--d); color:white; padding:5px 10px;">X</button></td></tr>`;
         });
         document.getElementById('hoca-tablo').innerHTML = html;
+    }
+
+    // --- YENİ EXCEL İNDİRME FONKSİYONU ---
+    function excelIndir() {
+        if(remoteData.ogrenciler.length === 0) return alert("Henüz indirilecek veri yok!");
+        
+        let csvContent = "\uFEFF"; // Türkçe karakter desteği için BOM ekledik
+        csvContent += "Öğrenci Adı,Giriş Kodu,Analiz Durumu,Cevap Puanları\n"; // Başlıklar
+
+        remoteData.ogrenciler.forEach(o => {
+            let ort = o.cevaplar && o.cevaplar.length ? (o.cevaplar.reduce((a,b)=>a+b)/o.cevaplar.length) : 0;
+            let analiz = ort === 0 ? "Henüz Çözmedi" : (ort > 3 ? "Destek Gerekmiyor" : "Destek Gerekiyor");
+            let cevaplar = o.cevaplar && o.cevaplar.length ? o.cevaplar.join(" - ") : "Yok";
+            
+            csvContent += `${o.isim},${o.kod},${analiz},"${cevaplar}"\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "Aihl_Rehberlik_Sonuclar.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     function sil(i) { if(confirm("Kaydı tamamen silmek istiyor musunuz?")) { remoteData.ogrenciler.splice(i,1); dbRef.set(remoteData); yukleTablo(); } }
